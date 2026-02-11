@@ -1,0 +1,17 @@
+body {
+    font-family: Arial, sans-serif;
+}
+
+#chatBox div {
+    margin-bottom: 5px;
+    padding: 3px;
+    border-radius: 5px;
+}
+
+#chatBox div:nth-child(odd) {
+    background-color: #e9ecef;
+}
+
+#chatBox div:nth-child(even) {
+    background-color: #d1e7dd;
+}

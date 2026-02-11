@@ -2,9 +2,89 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Room</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
+<body class="bg-light">
+<div class="container mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h4>Chat App</h4>
+        <button id="logoutBtn" class="btn btn-danger btn-sm">Logout</button>
+    </div>
 
+    <div class="mb-3">
+        <select id="roomSelect" class="form-select w-50">
+            <option value="devops">DevOps</option>
+            <option value="cloud">Cloud Computing</option>
+            <option value="covid19">Covid19</option>
+            <option value="sports">Sports</option>
+            <option value="nodeJS">NodeJS</option>
+        </select>
+        <button id="joinRoom" class="btn btn-primary btn-sm">Join Room</button>
+    </div>
+
+    <div id="chatBox" class="border p-3 mb-2 rounded" style="height:300px; overflow-y:auto;"></div>
+    <small id="typing" class="text-muted"></small>
+
+    <div class="input-group mt-2">
+        <input id="messageInput" type="text" class="form-control" placeholder="Type a message">
+        <button id="sendBtn" class="btn btn-success">Send</button>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io();
+    const user = JSON.parse(localStorage.getItem("user"));
+    const chatBox = document.getElementById("chatBox");
+    const roomSelect = document.getElementById("roomSelect");
+    const joinRoomBtn = document.getElementById("joinRoom");
+    const messageInput = document.getElementById("messageInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const typingText = document.getElementById("typing");
+    let currentRoom = "";
+
+    joinRoomBtn.addEventListener("click", () => {
+        if(currentRoom) socket.emit("leaveRoom", currentRoom); // optional if implemented
+        currentRoom = roomSelect.value;
+        socket.emit("joinRoom", currentRoom);
+        chatBox.innerHTML = "";
+    });
+
+    sendBtn.addEventListener("click", () => {
+        if(messageInput.value.trim() && currentRoom){
+            const msg = {
+                from_user: user.username,
+                room: currentRoom,
+                message: messageInput.value
+            };
+            socket.emit("chatMessage", msg);
+            messageInput.value = "";
+        }
+    });
+
+    messageInput.addEventListener("input", () => {
+        if(currentRoom){
+            socket.emit("typing", { room: currentRoom, username: user.username });
+        }
+    });
+
+    socket.on("message", data => {
+        chatBox.innerHTML += `<div><strong>${data.from_user}:</strong> ${data.message}</div>`;
+        chatBox.scrollTop = chatBox.scrollHeight;
+    });
+
+    socket.on("typing", username => {
+        typingText.textContent = `${username} is typing...`;
+        setTimeout(()=> typingText.textContent="", 1000);
+    });
+
+    document.getElementById("logoutBtn").addEventListener("click", () => {
+        localStorage.removeItem("user");
+        window.location.href = "/views/login.html";
+    });
+</script>
 </body>
 </html>
