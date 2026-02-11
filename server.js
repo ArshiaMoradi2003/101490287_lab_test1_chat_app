@@ -23,9 +23,19 @@ app.use("/views", express.static("views"));
 // Use auth routes
 app.use(authRoutes);
 
+// Store connected users: { username: socketId }
+const connectedUsers = new Map();
+
 // Socket.io connection handling
 io.on("connection", socket => {
     console.log("User connected:", socket.id);
+
+    // User joins with their username
+    socket.on("userJoin", username => {
+        connectedUsers.set(username, socket.id);
+        socket.username = username;
+        console.log(`User ${username} connected with socket ${socket.id}`);
+    });
 
     // Join room
     socket.on("joinRoom", room => {
@@ -42,8 +52,20 @@ io.on("connection", socket => {
     // Handle chat messages
     socket.on("chatMessage", async data => {
         try {
-            await GroupMessage.create(data);
-            io.to(data.room).emit("message", data);
+            // Add formatted date
+            const messageData = {
+                ...data,
+                date_sent: new Date().toLocaleString('en-US', {
+                    month: '2-digit',
+                    day: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                })
+            };
+            await GroupMessage.create(messageData);
+            io.to(data.room).emit("message", messageData);
         } catch (error) {
             console.error("Error saving message:", error);
         }
@@ -54,11 +76,40 @@ io.on("connection", socket => {
         socket.to(data.room).emit("typing", data.username);
     });
 
-    // Handle private messages (optional)
+    // Handle private messages
     socket.on("privateMessage", async data => {
         try {
-            await PrivateMessage.create(data);
-            io.to(data.to_user).emit("privateMessage", data);
+            // Add formatted date
+            const messageData = {
+                ...data,
+                date_sent: new Date().toLocaleString('en-US', {
+                    month: '2-digit',
+                    day: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                })
+            };
+            
+            // Save to database
+            await PrivateMessage.create(messageData);
+            
+            // Get recipient's socket ID
+            const recipientSocketId = connectedUsers.get(data.to_user);
+            
+            if (recipientSocketId) {
+                // Send to recipient
+                io.to(recipientSocketId).emit("privateMessage", messageData);
+                console.log(`Private message sent from ${data.from_user} to ${data.to_user}`);
+            } else {
+                // Recipient is offline, message saved in DB
+                console.log(`User ${data.to_user} is offline. Message saved to database.`);
+                socket.emit("messageStatus", { 
+                    success: false, 
+                    message: `${data.to_user} is currently offline. Message saved.` 
+                });
+            }
         } catch (error) {
             console.error("Error saving private message:", error);
         }
@@ -66,10 +117,15 @@ io.on("connection", socket => {
 
     // Handle disconnect
     socket.on("disconnect", () => {
+        if (socket.username) {
+            connectedUsers.delete(socket.username);
+            console.log(`User ${socket.username} disconnected`);
+        }
         console.log("User disconnected:", socket.id);
     });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
 
